@@ -4,9 +4,11 @@ export let supabase: SupabaseClient | null = null
 let initialization: Promise<SupabaseClient> | null = null
 
 export function createSupabaseClient(url: string, anonKey: string): SupabaseClient {
-  return createClient(url, anonKey, {
+  const client = createClient(url, anonKey, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
   })
+  supabase = client
+  return client
 }
 
 export function initializeSupabase(): Promise<SupabaseClient> {
@@ -19,9 +21,7 @@ export function initializeSupabase(): Promise<SupabaseClient> {
       if (!response.ok || !body.url || !body.anonKey) {
         throw new Error(body.error || 'Unable to load Supabase configuration.')
       }
-      const client = createSupabaseClient(body.url, body.anonKey)
-      supabase = client
-      return client
+      return createSupabaseClient(body.url, body.anonKey)
     })
     .catch((error) => {
       initialization = null
