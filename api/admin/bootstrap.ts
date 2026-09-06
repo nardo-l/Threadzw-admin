@@ -18,16 +18,13 @@ export default async function handler(req: Request) {
 
     const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
 
-    // The RPC uses a transaction-level advisory lock, so only one bootstrap request can win.
-    const { data: claimedBeforeCreate, error: claimCheckError } = await admin.rpc('claim_first_admin', { p_user_id: '00000000-0000-0000-0000-000000000000' })
-    if (claimCheckError && !claimCheckError.message.includes('duplicate key')) {
-      // We intentionally do not trust this placeholder claim. The function will reject because
-      // the placeholder user cannot be a real auth user; this check is only avoided below by
-      // using the direct admin-role count query instead.
-    }
+    // Seller accounts may already exist in auth.users. Only admin_roles determines whether
+    // this separate Mission Control bootstrap has been claimed.
+    const { count, error: countError } = await admin
+      .from('admin_roles')
+      .select('user_id', { count: 'exact', head: true })
+      .eq('active', true)
 
-    // Check that the one-time bootstrap is still available without touching seller accounts.
-    const { count, error: countError } = await admin.from('admin_roles').select('user_id', { count: 'exact', head: true }).eq('active', true)
     if (countError) return json({ error: 'Unable to check admin bootstrap state.' }, 500)
     if ((count ?? 0) > 0) return json({ error: 'Admin setup is already complete. New admin signups are disabled.' }, 403)
 
@@ -38,6 +35,7 @@ export default async function handler(req: Request) {
     })
     if (createError || !created.user) return json({ error: createError?.message || 'Unable to create admin account.' }, 400)
 
+    // claim_first_admin is transaction-locked and guarantees only one successful claimant.
     const { data: claimed, error: claimError } = await admin.rpc('claim_first_admin', { p_user_id: created.user.id })
     if (claimError || !claimed) {
       await admin.auth.admin.deleteUser(created.user.id)
