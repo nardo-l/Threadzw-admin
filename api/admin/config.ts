@@ -5,9 +5,18 @@ export default function handler(req: Request) {
 
   const url = process.env.SUPABASE_URL
   const anonKey = process.env.SUPABASE_ANON_KEY
-  if (!url || !anonKey) return json({ error: 'Supabase server configuration is missing.' }, 500)
 
-  // The Supabase anon/publishable key is intentionally safe for browser use.
-  // It is returned at runtime so no VITE_* environment variable is required.
+  if (!url || !anonKey) {
+    const missing = [
+      !url ? 'SUPABASE_URL' : null,
+      !anonKey ? 'SUPABASE_ANON_KEY' : null,
+    ].filter(Boolean)
+
+    return json({
+      error: `Supabase configuration is missing: ${missing.join(', ')}.`,
+      missing,
+    }, 500)
+  }
+
   return json({ url, anonKey })
 }
