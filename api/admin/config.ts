@@ -1,8 +1,14 @@
-import { json } from './_lib'
+function response(data: unknown, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+    },
+  })
+}
 
-export default function handler(req: Request) {
-  if (req.method !== 'GET') return json({ error: 'Method not allowed' }, 405)
-
+export function GET() {
   const url = process.env.SUPABASE_URL
   const anonKey = process.env.SUPABASE_ANON_KEY
 
@@ -10,13 +16,22 @@ export default function handler(req: Request) {
     const missing = [
       !url ? 'SUPABASE_URL' : null,
       !anonKey ? 'SUPABASE_ANON_KEY' : null,
-    ].filter(Boolean)
+    ].filter((value): value is string => Boolean(value))
 
-    return json({
+    return response({
       error: `Supabase configuration is missing: ${missing.join(', ')}.`,
       missing,
+      runtime: 'vercel-node',
     }, 500)
   }
 
-  return json({ url, anonKey })
+  return response({
+    ok: true,
+    url,
+    anonKey,
+  })
+}
+
+export function OPTIONS() {
+  return response({ ok: true })
 }
