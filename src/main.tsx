@@ -1,26 +1,44 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { Activity, ArrowUpRight, BarChart3, Bell, CheckCircle2, CircleDollarSign, Menu, Package, Search, ShieldCheck, Store, Users, X } from 'lucide-react';
+import { Activity, AlertTriangle, ArrowUpRight, BarChart3, Bell, CheckCircle2, CircleDollarSign, Clock3, LogOut, Menu, Package, Search, ShieldCheck, Store, Users, X } from 'lucide-react';
 import './styles.css';
+import { supabase } from './lib/supabase';
+import { callAdminApi } from './lib/admin';
 
-const metrics = [
-  {label:'Total sellers',value:'—',icon:Users,note:'Connect Supabase to load'},
-  {label:'Active shops',value:'—',icon:Store,note:'Live data pending'},
-  {label:'Products',value:'—',icon:Package,note:'Live data pending'},
-  {label:'Premium revenue',value:'$—',icon:CircleDollarSign,note:'Current $9 lifetime only'},
-];
+type Metric = { label:string; value:string; note:string; icon:React.ElementType };
+type DashboardData = { metrics:{totalSellers:number; activeShops:number; products:number; premiumRevenue:number; premiumSellers:number; freeSellers:number; customerInterests:number; storefrontVisits:number}; payments:{id:string; amount:number; status:string; created_at:string}[]; legacyPayments:{id:string; amount:number; status:string; created_at:string}[]; latencyMs:number; requestId:string };
 
-function App(){
- const [open,setOpen]=React.useState(false);
- return <div className="app">
-  <header className="topbar"><button className="icon mobile" onClick={()=>setOpen(!open)} aria-label="Menu">{open?<X/>:<Menu/>}</button><div className="brand"><span className="mark">T</span><div><strong>ThreadZW</strong><small>MISSION CONTROL</small></div></div><div className="top-actions"><button className="search"><Search size={17}/><span>Search</span><kbd>⌘ K</kbd></button><button className="icon"><Bell size={18}/></button><div className="avatar">A</div></div></header>
-  <div className="layout">
-   <aside className={open?'sidebar open':'sidebar'}><nav>{[['Dashboard',BarChart3],['Sellers',Users],['Shops',Store],['Moderation',ShieldCheck],['Payments',CircleDollarSign],['Analytics',Activity]].map(([label,Icon],i)=><button className={i===0?'nav active':'nav'} key={label as string} onClick={()=>setOpen(false)}><Icon size={18}/>{label as string}</button>)}</nav><div className="side-bottom"><div className="health"><span className="dot"/>Systems nominal</div><small>ThreadZW Admin v0.1</small></div></aside>
-   <main><div className="mobile-overlay" onClick={()=>setOpen(false)}></div><section className="hero"><div><p className="eyebrow">OVERVIEW / OPERATIONS</p><h1>Good evening, Admin.</h1><p className="muted">Your platform at a glance. Live Supabase metrics will appear here.</p></div><button className="primary"><ArrowUpRight size={16}/> View live activity</button></section>
-    <section className="metrics">{metrics.map(m=>{const I=m.icon;return <article className="metric" key={m.label}><div className="metric-head"><span>{m.label}</span><I size={17}/></div><strong>{m.value}</strong><small>{m.note}</small></article>})}</section>
-    <section className="grid"><article className="panel large"><div className="panel-head"><div><p className="eyebrow">PLATFORM PULSE</p><h2>Activity</h2></div><span className="pill"><span className="dot"/> Awaiting live data</span></div><div className="chart-placeholder"><BarChart3 size={34}/><p>Analytics will connect to <code>shop_analytics</code> and <code>analytics_events</code>.</p></div></article><article className="panel"><div className="panel-head"><div><p className="eyebrow">ATTENTION</p><h2>Operational queue</h2></div></div><div className="empty"><CheckCircle2 size={30}/><strong>Nothing connected yet</strong><span>Payments, moderation and health checks will surface here.</span></div></article></section>
-   </main>
-  </div>
- </div>
+const nav = [
+  ['Dashboard', BarChart3], ['Sellers', Users], ['Shops', Store], ['Moderation', ShieldCheck], ['Payments', CircleDollarSign], ['Analytics', Activity]
+] as const;
+
+function Login({onSuccess}:{onSuccess:()=>void}) {
+  const [email,setEmail]=React.useState(''); const [password,setPassword]=React.useState(''); const [busy,setBusy]=React.useState(false); const [error,setError]=React.useState('');
+  async function submit(e:React.FormEvent){e.preventDefault();setBusy(true);setError('');const {error}=await supabase.auth.signInWithPassword({email,password});if(error)setError(error.message);else onSuccess();setBusy(false)}
+  return <div className="login-page"><div className="login-card"><div className="brand login-brand"><span className="mark">T</span><div><strong>ThreadZW</strong><small>MISSION CONTROL</small></div></div><p className="eyebrow">SECURE ADMIN ACCESS</p><h1>Welcome back.</h1><p className="muted">Sign in with an approved ThreadZW admin account.</p><form onSubmit={submit}><label>Email<input autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} type="email" required placeholder="admin@threadzw.app"/></label><label>Password<input autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} type="password" required placeholder="••••••••"/></label>{error&&<div className="error"><AlertTriangle size={15}/>{error}</div>}<button className="primary full" disabled={busy}>{busy?'Signing in…':'Sign in'}</button></form><small className="security-note">Admin authorization is verified server-side.</small></div></div>
 }
+
+function Dashboard({onLogout}:{onLogout:()=>Promise<void>}) {
+ const [data,setData]=React.useState<DashboardData|null>(null); const [loading,setLoading]=React.useState(true); const [error,setError]=React.useState(''); const [open,setOpen]=React.useState(false); const [section,setSection]=React.useState('Dashboard');
+ async function load(){setLoading(true);setError('');try{setData(await callAdminApi<DashboardData>('/api/admin/dashboard'))}catch(e){setError(e instanceof Error?e.message:'Unable to load dashboard')}finally{setLoading(false)}}
+ React.useEffect(()=>{load()},[]);
+ const m=data?.metrics;
+ const metrics:Metric[]=[
+  {label:'Total sellers',value:m?m.totalSellers.toLocaleString():'—',note:'Registered accounts',icon:Users},
+  {label:'Active shops',value:m?m.activeShops.toLocaleString():'—',note:'Currently active',icon:Store},
+  {label:'Products',value:m?m.products.toLocaleString():'—',note:'Catalog inventory',icon:Package},
+  {label:'Premium revenue',value:m?`$${m.premiumRevenue.toFixed(2)}`:'$—',note:'Current $9 lifetime only',icon:CircleDollarSign}
+ ];
+ function select(label:string){setSection(label);setOpen(false)}
+ if(section!=='Dashboard') return <Shell open={open} setOpen={setOpen} section={section} select={select} onLogout={onLogout}><div className="coming"><div className="coming-icon"><Activity/></div><p className="eyebrow">MISSION CONTROL</p><h1>{section}</h1><p className="muted">This module is wired into the navigation and will be connected to live production data next.</p><button className="secondary" onClick={()=>select('Dashboard')}>Back to dashboard</button></div></Shell>;
+ return <Shell open={open} setOpen={setOpen} section={section} select={select} onLogout={onLogout}><section className="hero"><div><p className="eyebrow">OVERVIEW / OPERATIONS</p><h1>Good evening, Admin.</h1><p className="muted">Live platform intelligence from ThreadZW.</p></div><button className="primary" onClick={load}><ArrowUpRight size={16}/> Refresh data</button></section>
+ {error&&<div className="error banner"><AlertTriangle size={16}/><span>{error}</span><button onClick={load}>Retry</button></div>}
+ <section className="metrics">{metrics.map(x=>{const I=x.icon;return <article className="metric" key={x.label}><div className="metric-head"><span>{x.label}</span><I size={17}/></div><strong>{loading?'…':x.value}</strong><small>{x.note}</small></article>})}</section>
+ <section className="secondary-metrics"><div><span>Premium sellers</span><strong>{loading?'—':m?.premiumSellers.toLocaleString()}</strong></div><div><span>Free sellers</span><strong>{loading?'—':m?.freeSellers.toLocaleString()}</strong></div><div><span>Customer interests</span><strong>{loading?'—':m?.customerInterests.toLocaleString()}</strong><small>WhatsApp clicks</small></div><div><span>Storefront visits</span><strong>{loading?'—':m?.storefrontVisits.toLocaleString()}</strong></div></section>
+ <section className="grid"><article className="panel large"><div className="panel-head"><div><p className="eyebrow">PLATFORM PULSE</p><h2>Recent Premium payments</h2></div><span className="pill"><span className="dot"/> $9 lifetime</span></div>{loading?<div className="empty"><Clock3 size={25}/><span>Loading payment activity…</span></div>:data?.payments.length?<div className="activity-list">{data.payments.slice(0,6).map(p=><div className="activity-row" key={p.id}><div className="activity-icon"><CircleDollarSign size={16}/></div><div><strong>${Number(p.amount).toFixed(2)} Premium</strong><span>{new Date(p.created_at).toLocaleString()}</span></div><b className="status success">{p.status}</b></div>)}</div>:<div className="empty"><CheckCircle2 size={30}/><strong>No current Premium payments</strong><span>Payments will appear here as they are received.</span></div>}</article><article className="panel"><div className="panel-head"><div><p className="eyebrow">SYSTEM</p><h2>Operational health</h2></div><span className="pill"><span className="dot"/> Connected</span></div><div className="health-list"><div><span>Supabase API</span><b className="status success">Healthy</b></div><div><span>Admin API</span><b className="status success">{data?`${data.latencyMs}ms`:'Checking'}</b></div><div><span>Legacy payments</span><b>{data?.legacyPayments.length??'—'} records</b></div><div><span>Request ID</span><code>{data?.requestId?.slice(0,18)??'—'}</code></div></div></article></section></Shell>
+}
+
+function Shell({children,open,setOpen,section,select,onLogout}:{children:React.ReactNode;open:boolean;setOpen:(v:boolean)=>void;section:string;select:(v:string)=>void;onLogout:()=>Promise<void>}){return <div className="app"><header className="topbar"><button className="icon mobile" onClick={()=>setOpen(!open)} aria-label="Menu">{open?<X/>:<Menu/>}</button><div className="brand"><span className="mark">T</span><div><strong>ThreadZW</strong><small>MISSION CONTROL</small></div></div><div className="top-actions"><button className="search"><Search size={17}/><span>Search</span><kbd>⌘ K</kbd></button><button className="icon" aria-label="Notifications"><Bell size={18}/></button><button className="avatar" onClick={onLogout} title="Sign out">A</button></div></header><div className="layout"><aside className={open?'sidebar open':'sidebar'}><nav>{nav.map(([label,Icon])=><button className={section===label?'nav active':'nav'} key={label} onClick={()=>select(label)}><Icon size={18}/>{label}</button>)}</nav><div className="side-bottom"><button className="signout" onClick={onLogout}><LogOut size={15}/> Sign out</button><div className="health"><span className="dot"/>Systems nominal</div><small>ThreadZW Admin v0.2</small></div></aside><main><div className="mobile-overlay" onClick={()=>setOpen(false)}></div>{children}</main></div></div>}
+
+function App(){const [session,setSession]=React.useState<Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session']>(null);const [checking,setChecking]=React.useState(true);React.useEffect(()=>{supabase.auth.getSession().then(({data})=>{setSession(data.session);setChecking(false)});const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,s)=>setSession(s));return()=>subscription.unsubscribe()},[]);if(checking)return <div className="loading-screen">Loading Mission Control…</div>;if(!session)return <Login onSuccess={()=>supabase.auth.getSession().then(({data})=>setSession(data.session))}/>;return <Dashboard onLogout={async()=>{await supabase.auth.signOut();setSession(null)}}/>}
 createRoot(document.getElementById('root')!).render(<React.StrictMode><App/></React.StrictMode>);
