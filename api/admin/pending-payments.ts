@@ -17,13 +17,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { admin, user, role } = result
 
   if (req.method === 'GET') {
-    const { data, error } = await admin
-      .from('shops')
+    const { data, error } = await admin.from('shops')
       .select('id,name,slug,owner_id,account_status,plan,payment_status,payment_verification_status,payment_reference,payment_amount,payment_currency,payment_submitted_at,city')
       .eq('payment_verification_status', 'pending')
       .order('payment_submitted_at', { ascending: true })
     if (error) { res.status(500).json({ error: error.message }); return }
-    res.status(200).json({ success: true, payments: data || [] })
+
+    const payments = await Promise.all((data || []).map(async shop => {
+      const authUser = await admin.auth.admin.getUserById(shop.owner_id)
+      return { ...shop, owner_email: authUser.data.user?.email || null }
+    }))
+    res.status(200).json({ success: true, payments })
     return
   }
 
@@ -40,21 +44,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (action === 'approve') {
       const { error } = await admin.from('shops').update({
-        account_status: 'active',
-        plan: 'premium',
-        premium_status: 'active',
-        product_limit: null,
-        payment_required: false,
-        payment_status: 'paid',
-        payment_verification_status: 'approved',
-        payment_verified_at: now,
-        payment_verified_by: user.id,
-        paid_at: now,
-        subscription_status: 'active',
-        is_active: true,
-        storefront_published: true,
-        published_at: now,
-        updated_at: now
+        account_status: 'active', plan: 'premium', premium_status: 'active', product_limit: null,
+        payment_required: false, payment_status: 'paid', payment_verification_status: 'approved',
+        payment_verified_at: now, payment_verified_by: user.id, paid_at: now, subscription_status: 'active',
+        is_active: true, storefront_published: true, published_at: now, updated_at: now
       }).eq('id', shopId)
       if (error) { res.status(500).json({ error: error.message }); return }
 
@@ -62,8 +55,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (subError) { res.status(500).json({ error: subError.message }); return }
 
       await admin.from('payment_events').insert({ shop_id: shopId, owner_id: shop.owner_id, provider: 'nardopay', event_type: 'manual_admin_approval', amount: 9, currency: 'USD', payload: { payment_reference: shop.payment_reference, approved_by: user.id, approved_at: now }, signature_verified: false, processed: true, processed_at: now })
-      const newState = { account_status: 'active', plan: 'premium', payment_status: 'paid', payment_verification_status: 'approved', product_limit: null, is_active: true, storefront_published: true }
-      await audit({ admin, userId: user.id, role, action: 'payment.approve', targetType: 'shop', targetId: shopId, previousState, newState })
+      await audit({ admin, userId: user.id, role, action: 'payment.approve', targetType: 'shop', targetId: shopId, previousState, newState: { account_status: 'active', plan: 'premium', payment_status: 'paid', payment_verification_status: 'approved', product_limit: null, is_active: true, storefront_published: true } })
       res.status(200).json({ success: true, message: 'Payment approved and shop is live.' })
       return
     }
