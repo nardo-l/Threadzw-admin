@@ -1,6 +1,5 @@
 import React from 'react';
-import { createRoot } from 'react-dom/client';
-import { Activity, AlertTriangle, ArrowUpRight, BarChart3, Bell, Check, CheckCircle2, CircleDollarSign, Clock3, LogOut, Menu, Package, Search, ShieldCheck, Store, Users, X } from 'lucide-react';
+import { Activity, AlertTriangle, ArrowLeft, ArrowUpRight, Bell, Check, CheckCircle2, CircleDollarSign, Clock3, CreditCard, ExternalLink, Eye, LayoutDashboard, LogOut, Menu, MoreHorizontal, Package, Plus, RefreshCw, Search, Settings, ShieldCheck, Store, Tag, Trash2, Users, X, Zap } from 'lucide-react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import './styles.css';
 import { createSupabaseClient } from './lib/supabase';
